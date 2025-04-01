@@ -1,132 +1,236 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Check, X, Clock } from 'lucide-react';
+import { subscriptionAPI } from '../lib/api';
 import { Button } from '@/components/ui/button';
 import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
-import { subscriptionAPI } from '@/lib/api';
+import { CheckCircle, XCircle, Clock, Loader2, RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
 
-const Payment = () => {
+export default function Payment() {
 	const { status } = useParams();
 	const navigate = useNavigate();
 	const [loading, setLoading] = useState(true);
 	const [subscription, setSubscription] = useState(null);
+	const [checking, setChecking] = useState(false);
 
 	useEffect(() => {
-		// Verify if the user is authenticated
+		// Check if user is logged in
 		const token = localStorage.getItem('token');
 		if (!token) {
 			navigate('/login');
 			return;
 		}
 
-		// Fetch the latest subscription data
-		const fetchSubscription = async () => {
-			try {
-				setLoading(true);
-				const data = await subscriptionAPI.getUserSubscription();
-				setSubscription(data);
-				setLoading(false);
-			} catch (error) {
-				console.error('Error fetching subscription:', error);
-				setLoading(false);
-			}
-		};
-
 		fetchSubscription();
-	}, [navigate]);
+
+		// Clear pending payment data if status is success
+		if (status === 'success') {
+			localStorage.removeItem('pending_payment');
+		}
+	}, [status]);
+
+	const fetchSubscription = async () => {
+		try {
+			setLoading(true);
+			const data = await subscriptionAPI.getUserSubscription();
+			setSubscription(data);
+		} catch (error) {
+			console.error('Error fetching subscription:', error);
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	const checkPaymentStatus = async () => {
+		try {
+			setChecking(true);
+			// Call the backend to check the payment status
+			const { hasPendingPayment } = await subscriptionAPI.checkPendingPayment();
+
+			if (!hasPendingPayment) {
+				// If no pending payment, refresh subscription data
+				await fetchSubscription();
+				toast.success('Payment completed successfully!');
+				navigate('/dashboard');
+			} else {
+				toast.info('Your payment is still being processed. Please wait.');
+			}
+		} catch (error) {
+			console.error('Error checking payment status:', error);
+			toast.error('Failed to check payment status');
+		} finally {
+			setChecking(false);
+		}
+	};
 
 	const renderContent = () => {
-		if (loading) {
-			return (
-				<div className="flex flex-col items-center">
-					<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-					<p className="mt-4 text-lg">Memuat informasi pembayaran...</p>
-				</div>
-			);
-		}
-
-		// Variabel dideklarasikan di luar switch statement untuk menghindari error
-		const isPro = subscription?.subscription?.plan_type === 'pro';
+		// Use our status parameter to determine what to show
+		let isPro;
 
 		switch (status) {
 			case 'success':
+				isPro = subscription?.subscription?.plan_type === 'pro';
+
 				return (
-					<div className="flex flex-col items-center text-center">
-						<div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mb-6">
-							<Check className="h-8 w-8 text-green-600" />
-						</div>
-						<h1 className="text-2xl font-bold mb-2">Pembayaran Berhasil!</h1>
-						<p className="text-gray-600 mb-6 max-w-md">
+					<div className="text-center">
+						<CheckCircle className="w-24 h-24 text-green-500 mx-auto mb-6" />
+						<h2 className="text-2xl font-bold mb-2">Payment Successful!</h2>
+						<p className="text-gray-600 mb-6">
 							{isPro
-								? 'Akun Anda telah berhasil diupgrade ke Pro! Sekarang Anda memiliki akses ke semua fitur premium.'
-								: 'Pembayaran Anda telah kami terima. Mohon tunggu sementara kami memproses langganan Anda.'}
+								? 'Your account has been upgraded to Pro. Enjoy all premium features!'
+								: "Your payment was successful, but your account hasn't been upgraded yet. This could take a few minutes."}
 						</p>
-						<div className="flex gap-4">
-							<Button onClick={() => navigate('/dashboard')}>Kembali ke Dashboard</Button>
+						<div className="flex flex-col sm:flex-row justify-center gap-4">
+							<Button onClick={() => navigate('/dashboard')} className="w-full sm:w-auto">
+								Go to Dashboard
+							</Button>
+							{!isPro && (
+								<Button
+									onClick={checkPaymentStatus}
+									variant="outline"
+									className="w-full sm:w-auto"
+									disabled={checking}
+								>
+									{checking ? (
+										<>
+											<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+											Checking...
+										</>
+									) : (
+										<>
+											<RefreshCw className="mr-2 h-4 w-4" />
+											Check Status
+										</>
+									)}
+								</Button>
+							)}
 						</div>
 					</div>
 				);
 
 			case 'error':
 				return (
-					<div className="flex flex-col items-center text-center">
-						<div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mb-6">
-							<X className="h-8 w-8 text-red-600" />
-						</div>
-						<h1 className="text-2xl font-bold mb-2">Pembayaran Gagal</h1>
-						<p className="text-gray-600 mb-6 max-w-md">
-							Terjadi kesalahan saat memproses pembayaran Anda. Silakan coba lagi atau hubungi
-							dukungan pelanggan kami jika masalah berlanjut.
+					<div className="text-center">
+						<XCircle className="w-24 h-24 text-red-500 mx-auto mb-6" />
+						<h2 className="text-2xl font-bold mb-2">Payment Failed</h2>
+						<p className="text-gray-600 mb-6">
+							We couldn't process your payment. Please try again or contact support if the problem
+							persists.
 						</p>
-						<div className="flex gap-4">
-							<Button variant="outline" onClick={() => navigate('/dashboard')}>
-								Kembali ke Dashboard
+						<div className="flex flex-col sm:flex-row justify-center gap-4">
+							<Button onClick={() => navigate('/dashboard')} className="w-full sm:w-auto">
+								Go to Dashboard
 							</Button>
-							<Button onClick={() => navigate('/pricing')}>Coba Lagi</Button>
+							<Button
+								onClick={handleUpgrade}
+								variant="outline"
+								className="w-full sm:w-auto"
+								disabled={checking}
+							>
+								{checking ? (
+									<>
+										<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+										Processing...
+									</>
+								) : (
+									<>Try Again</>
+								)}
+							</Button>
 						</div>
 					</div>
 				);
 
 			case 'pending':
 				return (
-					<div className="flex flex-col items-center text-center">
-						<div className="w-16 h-16 rounded-full bg-yellow-100 flex items-center justify-center mb-6">
-							<Clock className="h-8 w-8 text-yellow-600" />
-						</div>
-						<h1 className="text-2xl font-bold mb-2">Pembayaran Tertunda</h1>
-						<p className="text-gray-600 mb-6 max-w-md">
-							Pembayaran Anda dalam status tertunda. Kami akan memperbarui status langganan Anda
-							segera setelah pembayaran selesai.
+					<div className="text-center">
+						<Clock className="w-24 h-24 text-yellow-500 mx-auto mb-6" />
+						<h2 className="text-2xl font-bold mb-2">Payment Pending</h2>
+						<p className="text-gray-600 mb-6">
+							Your payment is being processed. This may take a few minutes. We'll update your
+							account once the payment is confirmed.
 						</p>
-						<div className="flex gap-4">
-							<Button onClick={() => navigate('/dashboard')}>Kembali ke Dashboard</Button>
+						<div className="flex flex-col sm:flex-row justify-center gap-4">
+							<Button onClick={() => navigate('/dashboard')} className="w-full sm:w-auto">
+								Go to Dashboard
+							</Button>
+							<Button
+								onClick={checkPaymentStatus}
+								variant="outline"
+								className="w-full sm:w-auto"
+								disabled={checking}
+							>
+								{checking ? (
+									<>
+										<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+										Checking...
+									</>
+								) : (
+									<>
+										<RefreshCw className="mr-2 h-4 w-4" />
+										Check Status
+									</>
+								)}
+							</Button>
 						</div>
 					</div>
 				);
 
 			default:
 				return (
-					<div className="flex flex-col items-center text-center">
-						<h1 className="text-2xl font-bold mb-2">Status Tidak Dikenal</h1>
-						<p className="text-gray-600 mb-6">Terjadi kesalahan. Silakan kembali ke dashboard.</p>
-						<Button onClick={() => navigate('/dashboard')}>Kembali ke Dashboard</Button>
+					<div className="text-center">
+						<h2 className="text-2xl font-bold mb-2">Unknown Payment Status</h2>
+						<p className="text-gray-600 mb-6">
+							We couldn't determine the status of your payment. Please check your dashboard for
+							details.
+						</p>
+						<Button onClick={() => navigate('/dashboard')} className="w-full sm:w-auto">
+							Go to Dashboard
+						</Button>
 					</div>
 				);
 		}
 	};
 
+	const handleUpgrade = async () => {
+		try {
+			setChecking(true);
+			localStorage.removeItem('pending_payment');
+			const response = await subscriptionAPI.createSubscription();
+			if (response.redirectUrl) {
+				// Store pending payment info in localStorage
+				localStorage.setItem(
+					'pending_payment',
+					JSON.stringify({
+						hasPendingPayment: true,
+						timestamp: new Date().getTime(),
+					})
+				);
+
+				window.location.href = response.redirectUrl;
+			}
+		} catch (error) {
+			console.error(error);
+			toast.error('Failed to upgrade subscription. Please try again.');
+		} finally {
+			setChecking(false);
+		}
+	};
+
 	return (
-		<div className="min-h-screen flex flex-col">
+		<div className="min-h-screen bg-gray-50 flex flex-col">
 			<Navbar />
-			<div className="flex-grow flex items-center justify-center py-12 px-6">
-				<div className="w-full max-w-md bg-white p-8 rounded-xl shadow-sm border border-gray-200">
-					{renderContent()}
+			<main className="flex-grow flex items-center justify-center py-12 px-6">
+				<div className="w-full max-w-md bg-white p-8 rounded-lg shadow-sm">
+					{loading ? (
+						<div className="flex flex-col items-center justify-center py-12">
+							<Loader2 className="w-12 h-12 text-blue-500 animate-spin mb-4" />
+							<p className="text-gray-600">Loading your subscription information...</p>
+						</div>
+					) : (
+						renderContent()
+					)}
 				</div>
-			</div>
-			<Footer />
+			</main>
 		</div>
 	);
-};
-
-export default Payment;
+}

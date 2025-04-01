@@ -191,6 +191,29 @@ export const subscriptionAPI = {
 		const response = await api.post('/api/subscription');
 		return response.data;
 	},
+
+	// Cek apakah ada transaksi pembayaran yang masih pending
+	checkPendingPayment: async () => {
+		try {
+			const response = await api.get('/api/subscription/payment-status');
+			return response.data;
+		} catch (error) {
+			console.error('Error checking pending payment:', error);
+
+			// Coba fallback ke localStorage jika ada data
+			const pendingPayment = localStorage.getItem('pending_payment');
+			if (pendingPayment) {
+				try {
+					return JSON.parse(pendingPayment);
+				} catch (e) {
+					console.error('Error parsing pending payment data:', e);
+				}
+			}
+
+			// Jika masih error, kembalikan status default
+			return { hasPendingPayment: false };
+		}
+	},
 };
 
 export default api;

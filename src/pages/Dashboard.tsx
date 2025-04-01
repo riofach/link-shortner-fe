@@ -17,6 +17,7 @@ import {
 	Search,
 	SlidersHorizontal,
 	Copy,
+	Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { urlAPI, authAPI, subscriptionAPI } from '@/lib/api';
@@ -102,6 +103,12 @@ const Dashboard = () => {
 	const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
 	const [deleteUrlData, setDeleteUrlData] = useState<{ code: string; url: string } | null>(null);
 	const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
+	const [subscriptionLoading, setSubscriptionLoading] = useState(true);
+	const [copied, setCopied] = useState(false);
+	const [selectedUrl, setSelectedUrl] = useState<UrlData | null>(null);
+	const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+	const [urlToDelete, setUrlToDelete] = useState<string | null>(null);
+	const [isRetrying, setIsRetrying] = useState(false);
 	const navigate = useNavigate();
 
 	useEffect(() => {
@@ -296,6 +303,39 @@ const Dashboard = () => {
 		? formatDate(subscription.subscription.end_date)
 		: null;
 
+	const handleUpgrade = async () => {
+		setIsRetrying(true);
+		try {
+			// Check if user has a pending payment before creating a new subscription
+			const pendingPayment = await subscriptionAPI.checkPendingPayment();
+
+			if (pendingPayment.hasPendingPayment) {
+				toast.info('You have a pending payment. Redirecting to payment page...');
+				navigate('/payment/pending');
+				return;
+			}
+
+			const response = await subscriptionAPI.createSubscription();
+			if (response.redirectUrl) {
+				// Store pending payment info in localStorage
+				localStorage.setItem(
+					'pending_payment',
+					JSON.stringify({
+						hasPendingPayment: true,
+						timestamp: new Date().getTime(),
+					})
+				);
+
+				window.location.href = response.redirectUrl;
+			}
+		} catch (error) {
+			console.error(error);
+			toast.error('Failed to upgrade subscription. Please try again.');
+		} finally {
+			setIsRetrying(false);
+		}
+	};
+
 	return (
 		<div className="min-h-screen bg-gray-50 flex flex-col">
 			<Navbar />
@@ -332,11 +372,16 @@ const Dashboard = () => {
 								)}
 							</div>
 							{isFreePlan && (
-								<Link to="/pricing">
-									<Button variant="outline" size="sm">
-										Upgrade ke Pro
-									</Button>
-								</Link>
+								<Button onClick={handleUpgrade} variant="outline" size="sm" disabled={isRetrying}>
+									{isRetrying ? (
+										<>
+											<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+											Processing...
+										</>
+									) : (
+										<>Upgrade ke Pro</>
+									)}
+								</Button>
 							)}
 						</div>
 					)}
