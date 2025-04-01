@@ -109,8 +109,58 @@ export const urlAPI = {
 
 export const subscriptionAPI = {
 	getUserSubscription: async () => {
-		const response = await api.get('/api/subscription');
-		return response.data;
+		try {
+			// Tambahkan timeout untuk menghindari permintaan yang menggantung
+			const controller = new AbortController();
+			const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 detik timeout
+
+			const response = await api.get('/api/subscription', {
+				signal: controller.signal,
+			});
+
+			clearTimeout(timeoutId);
+			return response.data;
+		} catch (error) {
+			// Jika error adalah timeout atau network error, coba ambil dari cache
+			if (error.name === 'AbortError' || error.message?.includes('network')) {
+				console.warn('Network error in getUserSubscription, using cached data if available');
+				const cachedData = localStorage.getItem('subscription_status');
+				const cachedRawData = localStorage.getItem('subscription_raw_data');
+
+				if (cachedRawData) {
+					try {
+						return JSON.parse(cachedRawData);
+					} catch (parseError) {
+						console.error('Error parsing cached subscription data', parseError);
+					}
+				}
+
+				// Jika tidak ada cached full data, gunakan default untuk menghindari crash
+				if (cachedData) {
+					try {
+						const { isPro } = JSON.parse(cachedData);
+						return {
+							subscription: {
+								plan_type: isPro ? 'pro' : 'free',
+								id: 0,
+								end_date: null,
+							},
+							limits: {
+								links_per_day: isPro ? -1 : 3,
+								links_created_today: 0,
+								custom_code_allowed: isPro,
+								analytics_allowed: isPro,
+							},
+						};
+					} catch (parseError) {
+						console.error('Error parsing simplified cached data', parseError);
+					}
+				}
+			}
+
+			// Re-throw error untuk handler di komponen
+			throw error;
+		}
 	},
 
 	createSubscription: async () => {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
@@ -21,6 +21,7 @@ import {
 import { toast } from 'sonner';
 import { urlAPI, authAPI, subscriptionAPI } from '@/lib/api';
 import UpgradePrompt from '@/components/UpgradePrompt';
+import { fetchWithRetry } from '../utils/fetchWithRetry';
 
 interface UrlData {
 	code: string;
@@ -117,23 +118,6 @@ const Dashboard = () => {
 		fetchSubscriptionData();
 	}, [navigate]);
 
-	// Tambahkan fungsi retry untuk fetch dengan exponential backoff
-	const fetchWithRetry = async <T,>(fetchFn: () => Promise<T>, maxRetries = 3): Promise<T> => {
-		let retries = 0;
-		while (retries < maxRetries) {
-			try {
-				return await fetchFn();
-			} catch (error) {
-				console.error(`Error on attempt ${retries + 1}:`, error);
-				retries++;
-				if (retries >= maxRetries) throw error;
-				// Exponential backoff: 1s, 2s, 4s, ...
-				await new Promise((r) => setTimeout(r, Math.pow(2, retries) * 1000));
-			}
-		}
-		throw new Error('Failed after all retry attempts');
-	};
-
 	const fetchProfile = async () => {
 		try {
 			const data = await fetchWithRetry(() => authAPI.getProfile());
@@ -169,10 +153,52 @@ const Dashboard = () => {
 
 	const fetchSubscriptionData = async () => {
 		try {
+			// Cek cache terlebih dahulu
+			const cachedData = localStorage.getItem('subscription_raw_data');
+			const cachedTime = localStorage.getItem('subscription_cache_time');
+
+			// Jika ada data cache dan masih valid (kurang dari 30 menit)
+			if (cachedData && cachedTime) {
+				try {
+					const cacheTime = parseInt(cachedTime);
+					const now = new Date().getTime();
+
+					// Jika cache belum expired (30 menit)
+					if (now - cacheTime < 30 * 60 * 1000) {
+						const parsedData = JSON.parse(cachedData);
+						setSubscription(parsedData);
+						console.log('Using cached subscription data');
+
+						// Tetap fetch di background
+						setTimeout(() => {
+							refreshSubscriptionData();
+						}, 0);
+						return;
+					}
+				} catch (e) {
+					console.error('Error parsing cached dashboard subscription data', e);
+				}
+			}
+
+			// Tidak ada cache atau sudah expired
 			const data = await fetchWithRetry(() => subscriptionAPI.getUserSubscription());
 			setSubscription(data);
 		} catch (error) {
 			console.error('Error fetching subscription data:', error);
+		}
+	};
+
+	// Refresh subscription data tanpa mengganggu UX
+	const refreshSubscriptionData = async () => {
+		try {
+			const data = await fetchWithRetry(() => subscriptionAPI.getUserSubscription());
+			setSubscription(data);
+
+			// Update cache
+			localStorage.setItem('subscription_raw_data', JSON.stringify(data));
+			localStorage.setItem('subscription_cache_time', new Date().getTime().toString());
+		} catch (error) {
+			console.error('Error refreshing subscription data:', error);
 		}
 	};
 
