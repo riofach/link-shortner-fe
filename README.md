@@ -1,69 +1,128 @@
-# Welcome to your Lovable project
+# LinkRio - Frontend
 
-## Project info
+Frontend untuk aplikasi pemendek URL LinkRio menggunakan React, TypeScript, dan Tailwind CSS dengan ShadCN UI.
 
-**URL**: https://lovable.dev/projects/6fd7f672-68b6-408c-b3ed-691037511164
+## Teknologi yang Digunakan
 
-## How can I edit this code?
+- React 18 dengan TypeScript
+- Vite sebagai build tool
+- Tailwind CSS untuk styling
+- ShadCN UI untuk komponen UI
+- React Router untuk routing
+- React Query untuk state management dan fetching data
+- Axios untuk komunikasi API
 
-There are several ways of editing your application.
+## Fitur
 
-**Use Lovable**
+- **Halaman Landing**: Menampilkan informasi produk dan fitur
+- **Autentikasi**: Register dan login pengguna
+- **Dashboard**: Mengelola dan melacak URL pendek
+- **Analitik**: Melihat statistik kunjungan URL
+- **Fitur URL Pendek**:
+  - Pembuatan URL pendek dengan kode otomatis
+  - Opsi untuk menggunakan kode kustom
+  - Salin URL dengan sekali klik
+  - Statistik waktu nyata
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/6fd7f672-68b6-408c-b3ed-691037511164) and start prompting.
+## Cara Memulai
 
-Changes made via Lovable will be committed automatically to this repo.
+### Prasyarat
 
-**Use your preferred IDE**
+- Node.js 16.x atau lebih baru
+- npm atau yarn
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Instalasi
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+1. Clone repositori
 
-Follow these steps:
+   ```bash
+   git clone https://github.com/yourusername/link-shorter.git
+   cd link-shorter/frontend
+   ```
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+2. Install dependensi
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+   ```bash
+   npm install
+   # atau
+   yarn
+   ```
 
-# Step 3: Install the necessary dependencies.
-npm i
+3. Buat file `.env` dari `.env.example`
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+   ```bash
+   cp .env.example .env
+   ```
+
+4. Edit file `.env` dan sesuaikan `VITE_API_URL` dengan URL backend Anda
+
+   ```
+   VITE_API_URL=http://localhost:3000
+   ```
+
+5. Jalankan server development
+
+   ```bash
+   npm run dev
+   # atau
+   yarn dev
+   ```
+
+6. Buka [http://localhost:5173](http://localhost:5173) di browser Anda
+
+### Build untuk Production
+
+1. Build aplikasi
+
+   ```bash
+   npm run build
+   # atau
+   yarn build
+   ```
+
+2. Hasil build akan tersedia di folder `dist/`
+
+## Menghubungkan dengan Backend
+
+Frontend ini dirancang untuk bekerja dengan backend LinkRio. Pastikan Anda telah mengatur dan menjalankan backend sebelum menggunakan frontend. Backend menyediakan API untuk:
+
+- Autentikasi pengguna
+- Pembuatan dan pengelolaan URL pendek
+- Pengalihan URL
+- Analitik dan statistik
+
+## Struktur Direktori
+
+```
+frontend/
+├── public/            # Asset publik
+├── src/               # Kode sumber
+│   ├── components/    # Komponen UI
+│   ├── hooks/         # Custom React hooks
+│   ├── lib/           # Utilitas dan API
+│   ├── pages/         # Halaman utama
+│   ├── App.tsx        # Komponen root
+│   └── main.tsx       # Entry point
+├── .env.example       # Template variabel lingkungan
+├── index.html         # HTML template
+├── package.json       # Dependensi dan skrip
+├── tailwind.config.ts # Konfigurasi Tailwind
+├── tsconfig.json      # Konfigurasi TypeScript
+└── vite.config.ts     # Konfigurasi Vite
 ```
 
-**Edit a file directly in GitHub**
+## Deployment
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+Untuk men-deploy frontend, Anda dapat menggunakan:
 
-**Use GitHub Codespaces**
+1. Vercel: Sambungkan repositori GitHub Anda dan konfigurasi variabel lingkungan
+2. Netlify: Sambungkan repositori GitHub Anda dan konfigurasi variabel lingkungan
+3. GitHub Pages: Deploy folder `dist/` menggunakan GitHub Actions
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Kontribusi
 
-## What technologies are used for this project?
-
-This project is built with .
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/6fd7f672-68b6-408c-b3ed-691037511164) and click on Share -> Publish.
-
-## I want to use a custom domain - is that possible?
-
-We don't support custom domains (yet). If you want to deploy your project under your own domain then we recommend using Netlify. Visit our docs for more details: [Custom domains](https://docs.lovable.dev/tips-tricks/custom-domain/)
+1. Fork repositori
+2. Buat branch fitur (`git checkout -b fitur-baru`)
+3. Commit perubahan Anda (`git commit -m 'Menambahkan fitur baru'`)
+4. Push ke branch (`git push origin fitur-baru`)
+5. Buat Pull Request
