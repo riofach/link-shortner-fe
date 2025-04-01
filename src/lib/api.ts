@@ -15,18 +15,34 @@ api.interceptors.request.use(
 		if (token) {
 			config.headers.Authorization = `Bearer ${token}`;
 		}
+		console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`);
 		return config;
 	},
 	(error) => {
+		console.error('API Request Error:', error);
 		return Promise.reject(error);
 	}
 );
 
 // Interceptor respons untuk menangani kesalahan umum
 api.interceptors.response.use(
-	(response) => response,
+	(response) => {
+		console.log(
+			`API Response: ${response.status} ${response.config.method?.toUpperCase()} ${
+				response.config.url
+			}`
+		);
+		return response;
+	},
 	(error) => {
 		const { response } = error;
+
+		console.error('API Response Error:', {
+			status: response?.status,
+			url: response?.config?.url,
+			method: response?.config?.method?.toUpperCase(),
+			data: response?.data,
+		});
 
 		if (response && response.status === 401) {
 			// Token tidak valid atau kedaluwarsa
@@ -69,8 +85,15 @@ export const urlAPI = {
 	},
 
 	getUrlStats: async (code: string) => {
-		const response = await api.get(`/api/url/${code}/stats`);
-		return response.data;
+		try {
+			console.log(`Fetching stats for URL code: ${code}`);
+			const response = await api.get(`/api/url/${code}/stats`);
+			console.log('Stats response:', response.data);
+			return response.data;
+		} catch (error) {
+			console.error(`Error fetching stats for URL code ${code}:`, error);
+			throw error;
+		}
 	},
 
 	deleteUrl: async (code: string) => {

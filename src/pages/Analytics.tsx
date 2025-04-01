@@ -62,8 +62,26 @@ interface SubscriptionData {
 	};
 }
 
+// Fungsi untuk fetch dengan retry mechanism
+const fetchWithRetry = async <T,>(fetchFn: () => Promise<T>, maxRetries = 3): Promise<T> => {
+	let retries = 0;
+	while (retries < maxRetries) {
+		try {
+			return await fetchFn();
+		} catch (error) {
+			console.error(`Error on attempt ${retries + 1}:`, error);
+			retries++;
+			if (retries >= maxRetries) throw error;
+			// Exponential backoff: 1s, 2s, 4s, ...
+			await new Promise((r) => setTimeout(r, Math.pow(2, retries) * 1000));
+		}
+	}
+	throw new Error('Failed after all retry attempts');
+};
+
 const Analytics = () => {
-	const { id } = useParams<{ id: string }>();
+	// Perbaikan: gunakan parameter 'code' sesuai dengan App.tsx
+	const { code } = useParams<{ code: string }>();
 	const navigate = useNavigate();
 	const [isLoading, setIsLoading] = useState(true);
 	const [stats, setStats] = useState<UrlStats | null>(null);
@@ -71,6 +89,7 @@ const Analytics = () => {
 	const [copied, setCopied] = useState(false);
 	const [timeframe] = useState('7days');
 	const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
+	const [accessChecked, setAccessChecked] = useState(false);
 
 	useEffect(() => {
 		// Periksa jika pengguna sudah login
@@ -80,56 +99,61 @@ const Analytics = () => {
 			return;
 		}
 
-		if (id) {
-			fetchStats(id);
-		}
-
-		// Fetch subscription data
+		// Fetch data yang diperlukan
 		const fetchData = async () => {
-			if (!id) {
+			if (!code) {
 				navigate('/dashboard');
 				return;
 			}
 
-			// Fetch subscription data
 			try {
-				const subscriptionData = await subscriptionAPI.getUserSubscription();
+				setIsLoading(true);
+				console.log('Fetching subscription data...');
+				// Gunakan fetchWithRetry untuk meningkatkan keberhasilan fetch
+				const subscriptionData = await fetchWithRetry(() => subscriptionAPI.getUserSubscription());
 				setSubscription(subscriptionData);
 
-				// Jika pengguna tidak memiliki akses analitik, redirect ke pricing
+				// Jika pengguna Pro, langsung fetch stats
 				if (
-					subscriptionData?.subscription?.plan_type !== 'pro' &&
-					!subscriptionData?.limits?.analytics_allowed
+					subscriptionData?.subscription?.plan_type === 'pro' ||
+					subscriptionData?.limits?.analytics_allowed
 				) {
-					toast.error('Analitik hanya tersedia untuk pengguna Pro', {
-						action: {
-							label: 'Upgrade',
-							onClick: () => navigate('/pricing'),
-						},
-					});
-					setTimeout(() => navigate('/pricing'), 3000);
-					return;
+					console.log('User has analytics access, fetching stats...');
+					fetchStats(code);
+				} else {
+					console.log('User does not have analytics access, showing upgrade prompt');
+					setIsLoading(false);
+					setAccessChecked(true);
 				}
-
-				// Fetch stats if user has analytics access
-				fetchStats(id);
 			} catch (error) {
-				console.error('Error fetching subscription data:', error);
-				// Try to fetch stats anyway in case of subscription API error
-				fetchStats(id);
+				console.error('Error in initial data fetch:', error);
+				// Jika gagal mendapatkan subscription, coba fetch stats langsung
+				try {
+					fetchStats(code);
+				} catch (statsError) {
+					console.error('Error fetching stats as fallback:', statsError);
+					setIsLoading(false);
+					setError('Gagal memuat data. Silakan coba lagi nanti.');
+					setAccessChecked(true);
+				}
 			}
 		};
 
 		fetchData();
-	}, [id, navigate]);
+	}, [code, navigate]);
 
-	const fetchStats = async (code: string) => {
-		setIsLoading(true);
+	const fetchStats = async (urlCode: string) => {
+		console.log(`Fetching stats for code: ${urlCode}`);
 		try {
-			const response = await urlAPI.getUrlStats(code);
+			const response = await fetchWithRetry(() => urlAPI.getUrlStats(urlCode));
+			console.log('Stats fetched successfully:', response);
 			setStats(response);
+			setAccessChecked(true);
+			setIsLoading(false);
 		} catch (error: unknown) {
 			console.error('Error fetching stats:', error);
+			setIsLoading(false);
+			setAccessChecked(true);
 
 			if (
 				error &&
@@ -144,13 +168,8 @@ const Analytics = () => {
 				typeof error.response.data === 'object' &&
 				'upgradeToPro' in error.response.data
 			) {
-				toast.error('Analitik hanya tersedia untuk pengguna Pro', {
-					action: {
-						label: 'Upgrade',
-						onClick: () => navigate('/pricing'),
-					},
-				});
-				setTimeout(() => navigate('/pricing'), 3000);
+				// Tidak perlu navigasi otomatis, biarkan tampilan upgrade prompt
+				console.log('Access denied, user needs Pro subscription');
 			} else {
 				const errorMessage =
 					error &&
@@ -166,9 +185,8 @@ const Analytics = () => {
 						: 'Tidak dapat mengambil statistik URL';
 
 				toast.error(errorMessage);
+				setError(errorMessage);
 			}
-		} finally {
-			setIsLoading(false);
 		}
 	};
 
@@ -262,7 +280,8 @@ const Analytics = () => {
 	if (
 		subscription &&
 		subscription.subscription?.plan_type !== 'pro' &&
-		!subscription.limits?.analytics_allowed
+		!subscription.limits?.analytics_allowed &&
+		accessChecked
 	) {
 		return (
 			<div className="flex min-h-screen flex-col">
@@ -276,6 +295,24 @@ const Analytics = () => {
 						</p>
 						<Button onClick={() => navigate('/pricing')} className="mt-6">
 							Lihat Paket Pro
+						</Button>
+					</div>
+				</div>
+				<Footer />
+			</div>
+		);
+	}
+
+	if (error && !isLoading) {
+		return (
+			<div className="flex min-h-screen flex-col">
+				<Navbar />
+				<div className="container py-10 flex flex-col items-center justify-center flex-1">
+					<div className="max-w-md text-center">
+						<h1 className="text-3xl font-bold">Error</h1>
+						<p className="mt-4 text-gray-600">{error}</p>
+						<Button onClick={() => navigate('/dashboard')} className="mt-6">
+							Kembali ke Dashboard
 						</Button>
 					</div>
 				</div>
