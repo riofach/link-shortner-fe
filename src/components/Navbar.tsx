@@ -12,84 +12,117 @@ interface SubscriptionStatus {
 	error: boolean;
 }
 
+// Cek di level file (global) apakah user sudah Pro
+const checkUserProStatus = (): boolean => {
+	try {
+		// 1. Cek data dari localStorage
+		const cached = localStorage.getItem('subscription_status');
+		if (cached) {
+			const { isPro } = JSON.parse(cached);
+			return !!isPro; // Pastikan boolean
+		}
+
+		// 2. Jika tidak ada, cek dari raw data
+		const rawData = localStorage.getItem('subscription_raw_data');
+		if (rawData) {
+			try {
+				const data = JSON.parse(rawData);
+				if (data?.subscription?.plan_type === 'pro') {
+					return true;
+				}
+			} catch (e) {
+				console.error('Error parsing raw data:', e);
+			}
+		}
+	} catch (e) {
+		console.error('Error checking Pro status:', e);
+	}
+	return false;
+};
+
 const Navbar = () => {
 	const [isOpen, setIsOpen] = useState(false);
 	const [isLoggedIn, setIsLoggedIn] = useState(false);
+	// Preload dari global checker
+	const initialIsPro = checkUserProStatus();
 	const [subscription, setSubscription] = useState<SubscriptionStatus>({
-		isPro: false,
+		isPro: initialIsPro,
 		loading: true,
 		error: false,
 	});
+	// State terpisah untuk visibility menu pricing
+	const [hideMenu, setHideMenu] = useState(initialIsPro);
 	const navigate = useNavigate();
 
-	// Fungsi untuk mengambil status langganan dengan retry
-	const getSubscriptionStatus = async () => {
-		if (!isLoggedIn) return;
-
-		setSubscription((prev) => ({ ...prev, loading: true, error: false }));
-
-		// Coba ambil dari localStorage dulu jika tersedia dan masih valid
-		const cachedData = localStorage.getItem('subscription_status');
-		const cachedTime = localStorage.getItem('subscription_cache_time');
-		const rawData = localStorage.getItem('subscription_raw_data');
-
-		// Jika ada data cache dan masih valid (kurang dari 1 jam)
-		if (cachedData && cachedTime) {
-			try {
-				const parsedData = JSON.parse(cachedData);
-				const cacheTime = parseInt(cachedTime);
-				const now = new Date().getTime();
-
-				// Jika cache belum expired (1 jam)
-				if (now - cacheTime < 60 * 60 * 1000) {
-					setSubscription({
-						isPro: parsedData.isPro,
-						loading: false,
-						error: false,
-					});
-					// Tetap refresh di background setelah menggunakan cache
-					refreshSubscriptionInBackground();
-					return;
-				}
-			} catch (e) {
-				console.error('Error parsing cached subscription data', e);
-				// Lanjut fetch baru jika parsing error
-			}
-		}
-
-		// Fetch baru jika tidak ada cache atau sudah expired
-		fetchSubscription();
-	};
-
 	// Fetch subscription dan simpan ke cache
-	const fetchSubscription = async () => {
+	const fetchSubscription = async (force = false) => {
 		try {
-			const data = await fetchWithRetry(() => subscriptionAPI.getUserSubscription());
-			const isPro = data?.subscription?.plan_type === 'pro';
+			console.log('Fetching subscription in Navbar with force =', force);
 
-			// Simpan ke state
+			// Jika force = false, cek cache dulu
+			if (!force) {
+				// Coba ambil dari localStorage dulu jika tersedia dan masih valid
+				const cachedData = localStorage.getItem('subscription_status');
+				const cachedTime = localStorage.getItem('subscription_cache_time');
+
+				// Jika ada data cache dan masih valid (kurang dari 15 menit)
+				if (cachedData && cachedTime) {
+					try {
+						const parsedData = JSON.parse(cachedData);
+						const cacheTime = parseInt(cachedTime);
+						const now = new Date().getTime();
+
+						// Jika cache belum expired (15 menit)
+						if (now - cacheTime < 15 * 60 * 1000) {
+							const isPro = !!parsedData.isPro;
+							setSubscription({
+								isPro,
+								loading: false,
+								error: false,
+							});
+							setHideMenu(isPro);
+							console.log('Using cached data, isPro =', isPro);
+							return;
+						}
+					} catch (e) {
+						console.error('Error parsing cached subscription data', e);
+					}
+				}
+			}
+
+			// Cache tidak valid atau force = true, fetch dari server
+			const data = await fetchWithRetry(() => subscriptionAPI.getUserSubscription());
+			console.log('Fresh subscription data in Navbar:', data);
+
+			// Check jika ada data yang valid
+			if (!data) {
+				console.error('No subscription data returned');
+				return;
+			}
+
+			// Check struktur data dan extract plan_type
+			const planType = data?.subscription?.plan_type;
+			const isPro = planType === 'pro';
+			console.log(`User plan: ${planType}, isPro: ${isPro}`);
+
+			// Update semua status isPro
 			setSubscription({
 				isPro,
 				loading: false,
 				error: false,
 			});
+			setHideMenu(isPro);
 
 			// Simpan ke localStorage dengan timestamp
 			localStorage.setItem('subscription_status', JSON.stringify({ isPro }));
 			localStorage.setItem('subscription_cache_time', new Date().getTime().toString());
-			// Simpan data mentah untuk digunakan sebagai fallback
 			localStorage.setItem('subscription_raw_data', JSON.stringify(data));
+
+			console.log('Updated subscription status in localStorage');
 		} catch (error) {
 			console.error('Error fetching subscription:', error);
 			setSubscription((prev) => ({ ...prev, loading: false, error: true }));
 		}
-	};
-
-	// Refresh di background tanpa mengganggu UX
-	const refreshSubscriptionInBackground = () => {
-		setTimeout(() => {
-			fetchSubscription();
-		}, 0);
 	};
 
 	// Periksa status login dan langganan saat komponen dimuat
@@ -99,23 +132,34 @@ const Navbar = () => {
 		setIsLoggedIn(isUserLoggedIn);
 
 		if (isUserLoggedIn) {
-			getSubscriptionStatus();
+			// Selalu force refresh saat pertama kali mount
+			fetchSubscription(true);
 		}
 	}, []);
+
+	// Debug log
+	console.log('Navbar render - hideMenu:', hideMenu);
+	console.log('Navbar render - subscription.isPro:', subscription.isPro);
+	console.log('Navbar render - isLoggedIn:', isLoggedIn);
 
 	const handleLogout = () => {
 		localStorage.removeItem('token');
 		localStorage.removeItem('user');
 		localStorage.removeItem('subscription_status');
 		localStorage.removeItem('subscription_cache_time');
+		localStorage.removeItem('subscription_raw_data');
 		setIsLoggedIn(false);
 		setSubscription({
 			isPro: false,
 			loading: false,
 			error: false,
 		});
+		setHideMenu(false);
 		navigate('/');
 	};
+
+	// Sederhana: logika menampilkan menu pricing
+	const shouldShowPricingMenu = !isLoggedIn || !hideMenu;
 
 	return (
 		<nav className="bg-white border-b border-gray-100 py-4 px-6 md:px-12">
@@ -139,14 +183,14 @@ const Navbar = () => {
 						Fitur
 					</Link>
 					{/* Sembunyikan menu Harga jika pengguna sudah Pro */}
-					{!isLoggedIn || (isLoggedIn && !subscription.isPro) ? (
+					{shouldShowPricingMenu && (
 						<Link
 							to="/pricing"
 							className="text-gray-700 hover:text-primary transition-colors duration-200"
 						>
 							Harga
 						</Link>
-					) : null}
+					)}
 
 					{isLoggedIn ? (
 						<div className="flex items-center space-x-4">
@@ -196,7 +240,7 @@ const Navbar = () => {
 							Fitur
 						</Link>
 						{/* Sembunyikan menu Harga jika pengguna sudah Pro */}
-						{!isLoggedIn || (isLoggedIn && !subscription.isPro) ? (
+						{shouldShowPricingMenu && (
 							<Link
 								to="/pricing"
 								className="text-gray-700 hover:text-primary transition-colors duration-200 py-2"
@@ -204,7 +248,7 @@ const Navbar = () => {
 							>
 								Harga
 							</Link>
-						) : null}
+						)}
 
 						{isLoggedIn ? (
 							<>

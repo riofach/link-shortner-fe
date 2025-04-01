@@ -110,6 +110,7 @@ export const urlAPI = {
 export const subscriptionAPI = {
 	getUserSubscription: async () => {
 		try {
+			console.log('Fetching subscription data from backend...');
 			// Tambahkan timeout untuk menghindari permintaan yang menggantung
 			const controller = new AbortController();
 			const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 detik timeout
@@ -119,8 +120,31 @@ export const subscriptionAPI = {
 			});
 
 			clearTimeout(timeoutId);
-			return response.data;
+			console.log('Subscription data received:', response.data);
+
+			// Verifikasi dan normalisasi respon
+			const data = response.data;
+
+			// Pastikan ada property subscription
+			if (!data.subscription) {
+				console.error('Invalid subscription data format, missing subscription property');
+				throw new Error('Invalid subscription data format');
+			}
+
+			// Cek dan log tipe langganan
+			const planType = data.subscription.plan_type;
+			console.log('Plan type:', planType);
+
+			// Pastikan jika subscriptions.plan_type adalah 'pro', maka ini adalah akun pro
+			if (planType === 'pro') {
+				// Simpan ke localStorage agar cepat diakses
+				localStorage.setItem('subscription_status', JSON.stringify({ isPro: true }));
+				localStorage.setItem('subscription_cache_time', new Date().getTime().toString());
+			}
+
+			return data;
 		} catch (error) {
+			console.error('Error in getUserSubscription:', error);
 			// Jika error adalah timeout atau network error, coba ambil dari cache
 			if (error.name === 'AbortError' || error.message?.includes('network')) {
 				console.warn('Network error in getUserSubscription, using cached data if available');
