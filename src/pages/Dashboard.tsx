@@ -70,6 +70,7 @@ interface SubscriptionData {
 	subscription: {
 		id: number;
 		plan_type: string;
+		start_date: string;
 		end_date: string | null;
 	};
 	limits: {
@@ -79,6 +80,17 @@ interface SubscriptionData {
 		analytics_allowed: boolean;
 	};
 }
+
+// Fungsi untuk memformat tanggal
+const formatDate = (dateString: string) => {
+	if (!dateString) return '';
+	const date = new Date(dateString);
+	return new Intl.DateTimeFormat('id-ID', {
+		year: 'numeric',
+		month: 'long',
+		day: 'numeric',
+	}).format(date);
+};
 
 const Dashboard = () => {
 	const [links, setLinks] = useState<UrlData[]>([]);
@@ -105,9 +117,26 @@ const Dashboard = () => {
 		fetchSubscriptionData();
 	}, [navigate]);
 
+	// Tambahkan fungsi retry untuk fetch dengan exponential backoff
+	const fetchWithRetry = async <T,>(fetchFn: () => Promise<T>, maxRetries = 3): Promise<T> => {
+		let retries = 0;
+		while (retries < maxRetries) {
+			try {
+				return await fetchFn();
+			} catch (error) {
+				console.error(`Error on attempt ${retries + 1}:`, error);
+				retries++;
+				if (retries >= maxRetries) throw error;
+				// Exponential backoff: 1s, 2s, 4s, ...
+				await new Promise((r) => setTimeout(r, Math.pow(2, retries) * 1000));
+			}
+		}
+		throw new Error('Failed after all retry attempts');
+	};
+
 	const fetchProfile = async () => {
 		try {
-			const data = await authAPI.getProfile();
+			const data = await fetchWithRetry(() => authAPI.getProfile());
 			setProfile(data);
 		} catch (error) {
 			console.error('Error fetching profile:', error);
@@ -117,7 +146,7 @@ const Dashboard = () => {
 
 	const fetchDashboardStats = async () => {
 		try {
-			const data = await urlAPI.getDashboardStats();
+			const data = await fetchWithRetry(() => urlAPI.getDashboardStats());
 			setDashboardStats(data);
 		} catch (error) {
 			console.error('Error fetching dashboard stats:', error);
@@ -128,7 +157,7 @@ const Dashboard = () => {
 	const fetchLinks = async () => {
 		setIsLoading(true);
 		try {
-			const data = await urlAPI.getUserUrls();
+			const data = await fetchWithRetry(() => urlAPI.getUserUrls());
 			setLinks(data);
 			setIsLoading(false);
 		} catch (error) {
@@ -140,7 +169,7 @@ const Dashboard = () => {
 
 	const fetchSubscriptionData = async () => {
 		try {
-			const data = await subscriptionAPI.getUserSubscription();
+			const data = await fetchWithRetry(() => subscriptionAPI.getUserSubscription());
 			setSubscription(data);
 		} catch (error) {
 			console.error('Error fetching subscription data:', error);
@@ -236,6 +265,11 @@ const Dashboard = () => {
 	const linksCreatedToday = subscription?.limits?.links_created_today || 0;
 	const isLimitReached = isFreePlan && linksPerDay > 0 && linksCreatedToday >= linksPerDay;
 
+	// Format subscription end date
+	const subscriptionEndDate = subscription?.subscription?.end_date
+		? formatDate(subscription.subscription.end_date)
+		: null;
+
 	return (
 		<div className="min-h-screen bg-gray-50 flex flex-col">
 			<Navbar />
@@ -252,6 +286,34 @@ const Dashboard = () => {
 							Tautan Baru
 						</Button>
 					</div>
+
+					{/* Subscription Status */}
+					{subscription && (
+						<div className="bg-white rounded-xl border border-gray-200 p-4 mb-6 flex justify-between items-center">
+							<div>
+								<h3 className="font-medium">
+									Status Langganan:
+									<span
+										className={`ml-2 ${
+											isFreePlan ? 'text-gray-600' : 'text-green-600 font-semibold'
+										}`}
+									>
+										{isFreePlan ? 'Free' : 'Pro'}
+									</span>
+								</h3>
+								{!isFreePlan && subscriptionEndDate && (
+									<p className="text-sm text-gray-600">Aktif hingga: {subscriptionEndDate}</p>
+								)}
+							</div>
+							{isFreePlan && (
+								<Link to="/pricing">
+									<Button variant="outline" size="sm">
+										Upgrade ke Pro
+									</Button>
+								</Link>
+							)}
+						</div>
+					)}
 
 					{/* Stats Summary - Now using real-time data */}
 					{dashboardStats && (
