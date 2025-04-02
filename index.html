@@ -2,38 +2,53 @@
 <html lang="en">
 	<head>
 		<meta charset="UTF-8" />
+		<link rel="icon" type="image/png" href="/images/favicon.png?v=1" />
+		<link rel="shortcut icon" href="/favicon.ico?v=1" />
+		<link rel="apple-touch-icon" href="/images/faviconpng?v=1" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>LinkRio - Modern URL Shortener</title>
-		<meta
-			name="description"
-			content="Create short, memorable links in seconds. Track performance with detailed analytics."
-		/>
-		<meta name="author" content="LinkRio" />
+		<title>LinkRio - URL Shortener</title>
+		<meta name="description" content="LinkRio - The Ultimate URL Shortener for Modern Web" />
+		<meta name="theme-color" content="#4f46e5" />
 
-		<meta property="og:title" content="LinkRio - Modern URL Shortener" />
+		<!-- Open Graph / Facebook -->
+		<meta property="og:type" content="website" />
+		<meta property="og:url" content="https://linkrio.com/" />
+		<meta property="og:title" content="LinkRio - URL Shortener" />
 		<meta
 			property="og:description"
-			content="Create short, memorable links in seconds. Track performance with detailed analytics."
+			content="Link shortener with analytics and custom domains. Perfect for marketing campaigns and social media."
 		/>
-		<meta property="og:type" content="website" />
-		<meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+		<meta property="og:image" content="/images/favicon.png" />
 
-		<meta name="twitter:card" content="summary_large_image" />
-		<meta name="twitter:site" content="@linkrio" />
-		<meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
-
-		<link rel="preconnect" href="https://fonts.googleapis.com" />
-		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-		<link
-			rel="stylesheet"
-			href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+		<!-- Twitter -->
+		<meta property="twitter:card" content="summary_large_image" />
+		<meta property="twitter:url" content="https://linkrio.com/" />
+		<meta property="twitter:title" content="LinkRio - URL Shortener" />
+		<meta
+			property="twitter:description"
+			content="Link shortener with analytics and custom domains. Perfect for marketing campaigns and social media."
 		/>
+		<meta property="twitter:image" content="/images/favicon.png" />
+		<script>
+			// Single Page Apps for GitHub Pages or any static file server
+			// Redirect all routes to index.html
+			(function (l) {
+				if (l.search[1] === '/') {
+					var decoded = l.search
+						.slice(1)
+						.split('&')
+						.map(function (s) {
+							return s.replace(/~and~/g, '&');
+						})
+						.join('?');
+					window.history.replaceState(null, null, l.pathname.slice(0, -1) + decoded + l.hash);
+				}
+			})(window.location);
+		</script>
 	</head>
-
 	<body>
+		<noscript>You need to enable JavaScript to run this app.</noscript>
 		<div id="root"></div>
-		<!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS VERY COMMENT! -->
-		<script src="https://cdn.gpteng.co/gptengineer.js" type="module"></script>
 		<script type="module" src="/src/main.tsx"></script>
 	</body>
 </html>
