@@ -50,6 +50,19 @@ const Register = () => {
 		setIsLoading(true);
 
 		try {
+			// Clear any existing payment data from localStorage/sessionStorage to avoid issues with new accounts
+			localStorage.removeItem('pending_payment');
+			localStorage.removeItem('subscription_status');
+			localStorage.removeItem('subscription_cache_time');
+			localStorage.removeItem('subscription_raw_data');
+
+			// Clear any redirect URLs in sessionStorage
+			Object.keys(sessionStorage).forEach((key) => {
+				if (key.startsWith('redirect_')) {
+					sessionStorage.removeItem(key);
+				}
+			});
+
 			const response = await authAPI.register(values.email, values.password, values.name);
 
 			// Simpan token dan data user

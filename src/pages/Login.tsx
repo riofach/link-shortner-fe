@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -22,7 +22,7 @@ import { authAPI } from '@/lib/api';
 
 const formSchema = z.object({
 	email: z.string().email({ message: 'Please enter a valid email address' }),
-	password: z.string().min(1, { message: 'Password is required' }),
+	password: z.string().min(8, { message: 'Password must be at least 8 characters' }),
 	rememberMe: z.boolean().optional(),
 });
 
@@ -32,6 +32,8 @@ const Login = () => {
 	const [showPassword, setShowPassword] = useState(false);
 	const [isLoading, setIsLoading] = useState(false);
 	const navigate = useNavigate();
+	const location = useLocation();
+	const from = location.state?.from || '/dashboard';
 
 	const form = useForm<FormValues>({
 		resolver: zodResolver(formSchema),
@@ -46,6 +48,20 @@ const Login = () => {
 		setIsLoading(true);
 
 		try {
+			// Clear any existing payment data from localStorage/sessionStorage
+			// This is important to prevent showing pending payments from a different user account
+			localStorage.removeItem('pending_payment');
+			localStorage.removeItem('subscription_status');
+			localStorage.removeItem('subscription_cache_time');
+			localStorage.removeItem('subscription_raw_data');
+
+			// Clear any redirect URLs in sessionStorage
+			Object.keys(sessionStorage).forEach((key) => {
+				if (key.startsWith('redirect_')) {
+					sessionStorage.removeItem(key);
+				}
+			});
+
 			const response = await authAPI.login(values.email, values.password);
 
 			// Simpan token dan data user
@@ -54,7 +70,7 @@ const Login = () => {
 
 			setIsLoading(false);
 			toast.success('Login berhasil');
-			navigate('/dashboard');
+			navigate(from);
 		} catch (error: unknown) {
 			setIsLoading(false);
 
@@ -71,7 +87,7 @@ const Login = () => {
 			) {
 				toast.error(String(error.response.data.error));
 			} else {
-				toast.error('Gagal masuk. Silakan coba lagi.');
+				toast.error('Gagal login. Silakan coba lagi.');
 			}
 		}
 	};
@@ -83,8 +99,8 @@ const Login = () => {
 			<main className="flex-grow flex items-center justify-center py-12 px-6">
 				<div className="w-full max-w-md space-y-8">
 					<div className="text-center">
-						<h1 className="text-2xl font-bold text-gray-900">Welcome back</h1>
-						<p className="mt-2 text-gray-600">Sign in to your account to continue</p>
+						<h1 className="text-2xl font-bold text-gray-900">Log in to your account</h1>
+						<p className="mt-2 text-gray-600">Welcome back! Please enter your credentials</p>
 					</div>
 
 					<div className="bg-white border border-gray-200 rounded-xl p-6 md:p-8 shadow-sm">
@@ -118,15 +134,7 @@ const Login = () => {
 									name="password"
 									render={({ field }) => (
 										<FormItem>
-											<div className="flex items-center justify-between">
-												<FormLabel>Password</FormLabel>
-												<Link
-													to="/forgot-password"
-													className="text-sm text-primary hover:underline"
-												>
-													Forgot password?
-												</Link>
-											</div>
+											<FormLabel>Password</FormLabel>
 											<FormControl>
 												<div className="relative">
 													<Lock className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
@@ -155,32 +163,26 @@ const Login = () => {
 									)}
 								/>
 
-								{/* <FormField
-									control={form.control}
-									name="rememberMe"
-									render={({ field }) => (
-										<FormItem className="flex flex-row items-center space-x-3 space-y-0">
-											<FormControl>
-												<Checkbox checked={field.value} onCheckedChange={field.onChange} />
-											</FormControl>
-											<div className="leading-none">
-												<FormLabel className="cursor-pointer">Remember me</FormLabel>
-											</div>
-										</FormItem>
-									)}
-								/> */}
+								<div className="flex justify-end">
+									<Link
+										to="/forgot-password"
+										className="text-sm text-primary hover:underline font-medium"
+									>
+										Forgot password?
+									</Link>
+								</div>
 
 								<Button type="submit" className="w-full" disabled={isLoading}>
-									{isLoading ? 'Signing In...' : 'Sign In'}
+									{isLoading ? 'Logging in...' : 'Log in'}
 								</Button>
 							</form>
 						</Form>
 
 						<div className="mt-6 text-center text-sm">
 							<p className="text-gray-600">
-								Don't have an account yet?{' '}
+								Don't have an account?{' '}
 								<Link to="/register" className="text-primary font-medium hover:underline">
-									Create an account
+									Create one
 								</Link>
 							</p>
 						</div>

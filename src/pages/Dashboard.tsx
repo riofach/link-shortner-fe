@@ -18,6 +18,7 @@ import {
 	SlidersHorizontal,
 	Copy,
 	Loader2,
+	Clock,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { urlAPI, authAPI, subscriptionAPI } from '@/lib/api';
@@ -103,13 +104,63 @@ const Dashboard = () => {
 	const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
 	const [deleteUrlData, setDeleteUrlData] = useState<{ code: string; url: string } | null>(null);
 	const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
-	const [subscriptionLoading, setSubscriptionLoading] = useState(true);
+	const [loading, setLoading] = useState(true);
 	const [copied, setCopied] = useState(false);
 	const [selectedUrl, setSelectedUrl] = useState<UrlData | null>(null);
 	const [showConfirmDelete, setShowConfirmDelete] = useState(false);
 	const [urlToDelete, setUrlToDelete] = useState<string | null>(null);
 	const [isRetrying, setIsRetrying] = useState(false);
+	const [hasPendingPayment, setHasPendingPayment] = useState(false);
+	const [isPro, setIsPro] = useState(false);
 	const navigate = useNavigate();
+
+	// Check for pending payment and update state
+	const checkAndUpdatePendingPayment = () => {
+		try {
+			// Get the current user
+			const userString = localStorage.getItem('user');
+			if (!userString) return false;
+
+			const user = JSON.parse(userString);
+			const userId = user.id;
+			if (!userId) return false;
+
+			const pendingPayment = localStorage.getItem('pending_payment');
+			if (pendingPayment) {
+				const data = JSON.parse(pendingPayment);
+
+				// Verify the pending payment belongs to the current user
+				if (!data.userId || data.userId !== userId) {
+					// Clear invalid pending payment data
+					localStorage.removeItem('pending_payment');
+					setHasPendingPayment(false);
+					return false;
+				}
+
+				if (data.hasPendingPayment) {
+					// Check if payment might be expired (more than 1 hour)
+					const timestamp = data.timestamp;
+					const now = new Date().getTime();
+					const hourInMillis = 60 * 60 * 1000;
+
+					if (now - timestamp < hourInMillis) {
+						setHasPendingPayment(true);
+						return true;
+					} else {
+						// Clear expired pending payment data
+						localStorage.removeItem('pending_payment');
+						setHasPendingPayment(false);
+					}
+				}
+			}
+		} catch (e) {
+			console.error('Error checking pending payment:', e);
+			// Clear potentially corrupted data
+			localStorage.removeItem('pending_payment');
+			setHasPendingPayment(false);
+		}
+		return false;
+	};
 
 	useEffect(() => {
 		// Periksa jika pengguna sudah login
@@ -123,6 +174,7 @@ const Dashboard = () => {
 		fetchDashboardStats();
 		fetchLinks();
 		fetchSubscriptionData();
+		checkAndUpdatePendingPayment();
 	}, [navigate]);
 
 	const fetchProfile = async () => {
@@ -317,22 +369,75 @@ const Dashboard = () => {
 
 			const response = await subscriptionAPI.createSubscription();
 			if (response.redirectUrl) {
+				// Get the current user ID to associate with the payment
+				const userString = localStorage.getItem('user');
+				const user = userString ? JSON.parse(userString) : null;
+				const userId = user?.id;
+
 				// Store pending payment info in localStorage
 				localStorage.setItem(
 					'pending_payment',
 					JSON.stringify({
 						hasPendingPayment: true,
 						timestamp: new Date().getTime(),
+						paymentId: response.payment.id,
+						orderId: response.payment.order_id,
+						userId, // Associate with current user
 					})
 				);
 
+				// Also store the redirect URL in sessionStorage for retrieval if needed
+				sessionStorage.setItem(`redirect_${response.payment.order_id}`, response.redirectUrl);
+
 				window.location.href = response.redirectUrl;
+			} else {
+				toast.error('Failed to create payment. Please try again.');
 			}
 		} catch (error) {
 			console.error(error);
 			toast.error('Failed to upgrade subscription. Please try again.');
 		} finally {
 			setIsRetrying(false);
+		}
+	};
+
+	// Fungsi untuk mengambil data subscription
+	const fetchSubscription = async (forceRefresh = false) => {
+		setLoading(true);
+		try {
+			// Check cache if not forcing refresh
+			if (!forceRefresh) {
+				const cachedStatus = localStorage.getItem('subscription_status');
+				const cacheTimeStr = localStorage.getItem('subscription_cache_time');
+
+				if (cachedStatus && cacheTimeStr) {
+					const cacheTime = parseInt(cacheTimeStr, 10);
+					const now = new Date().getTime();
+					// Cache valid for 1 hour
+					if (now - cacheTime < 60 * 60 * 1000) {
+						setIsPro(cachedStatus === 'active');
+						setLoading(false);
+
+						// If subscription is active, clear any pending payment data
+						if (cachedStatus === 'active') {
+							localStorage.removeItem('pending_payment');
+							// Clear any redirect URLs from session storage
+							Object.keys(sessionStorage).forEach((key) => {
+								if (key.startsWith('redirect_')) {
+									sessionStorage.removeItem(key);
+								}
+							});
+						}
+
+						return;
+					}
+				}
+			}
+
+			// ... existing code ...
+		} catch (error) {
+			console.error('Error fetching subscription:', error);
+			setLoading(false);
 		}
 	};
 
@@ -353,6 +458,33 @@ const Dashboard = () => {
 						</Button>
 					</div>
 
+					{/* Pending Payment Notice */}
+					{hasPendingPayment && (
+						<div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6 rounded-md">
+							<div className="flex items-center">
+								<Clock className="h-5 w-5 text-yellow-400 mr-3" />
+								<div>
+									<p className="font-medium text-yellow-700">
+										Anda memiliki pembayaran yang tertunda
+									</p>
+									<p className="text-sm text-yellow-600">
+										Mohon selesaikan pembayaran Anda untuk mengakses fitur Pro.
+									</p>
+								</div>
+								<div className="ml-auto">
+									<Button
+										size="sm"
+										onClick={() => navigate('/payment/pending')}
+										variant="outline"
+										className="border-yellow-500 text-yellow-700 hover:bg-yellow-100"
+									>
+										Lanjutkan Pembayaran
+									</Button>
+								</div>
+							</div>
+						</div>
+					)}
+
 					{/* Subscription Status */}
 					{subscription && (
 						<div className="bg-white rounded-xl border border-gray-200 p-4 mb-6 flex justify-between items-center">
@@ -371,7 +503,7 @@ const Dashboard = () => {
 									<p className="text-sm text-gray-600">Aktif hingga: {subscriptionEndDate}</p>
 								)}
 							</div>
-							{isFreePlan && (
+							{isFreePlan && !hasPendingPayment && (
 								<Button onClick={handleUpgrade} variant="outline" size="sm" disabled={isRetrying}>
 									{isRetrying ? (
 										<>
@@ -381,6 +513,11 @@ const Dashboard = () => {
 									) : (
 										<>Upgrade ke Pro</>
 									)}
+								</Button>
+							)}
+							{isFreePlan && hasPendingPayment && (
+								<Button onClick={() => navigate('/payment/pending')} variant="outline" size="sm">
+									Lanjutkan Pembayaran
 								</Button>
 							)}
 						</div>
